@@ -9,7 +9,9 @@ use crypto_common::typenum::Unsigned;
 use rustls::crypto::cipher::{self, AeadKey, Iv};
 use rustls::{quic, Error, Tls13CipherSuite};
 
-#[allow(dead_code)] // TODO
+/// QUIC header protection is currently not implemented for this provider.
+/// The type exists only to satisfy trait bounds; attempts to use it will
+/// result in explicit errors rather than panics.
 pub struct HeaderProtectionKey(AeadKey);
 
 impl HeaderProtectionKey {
@@ -25,7 +27,9 @@ impl quic::HeaderProtectionKey for HeaderProtectionKey {
         _first: &mut u8,
         _packet_number: &mut [u8],
     ) -> Result<(), Error> {
-        todo!()
+        Err(Error::General(
+            "QUIC header protection is not supported by rustls-rustcrypto".into(),
+        ))
     }
 
     fn decrypt_in_place(
@@ -34,12 +38,15 @@ impl quic::HeaderProtectionKey for HeaderProtectionKey {
         _first: &mut u8,
         _packet_number: &mut [u8],
     ) -> Result<(), Error> {
-        todo!()
+        Err(Error::General(
+            "QUIC header protection is not supported by rustls-rustcrypto".into(),
+        ))
     }
 
     #[inline]
     fn sample_len(&self) -> usize {
-        todo!()
+        // No valid sample length since header protection is unsupported.
+        0
     }
 }
 
@@ -71,8 +78,9 @@ impl quic::PacketKey for PacketKey {
         packet_number: u64,
         aad: &[u8],
         payload: &mut [u8],
+        _key_id: Option<u32>,
     ) -> Result<quic::Tag, Error> {
-        let nonce = cipher::Nonce::new(&self.iv, packet_number).0;
+        let nonce: [u8; 12] = cipher::Nonce::new(&self.iv, packet_number).to_array().expect("nonce length should match");
 
         let tag = self
             .crypto
@@ -93,10 +101,11 @@ impl quic::PacketKey for PacketKey {
         packet_number: u64,
         aad: &[u8],
         payload: &'a mut [u8],
+        _key_id: Option<u32>,
     ) -> Result<&'a [u8], Error> {
         let mut payload_ = payload.to_vec();
         let payload_len = payload_.len();
-        let nonce = chacha20poly1305::Nonce::from(cipher::Nonce::new(&self.iv, packet_number).0);
+        let nonce = chacha20poly1305::Nonce::from(cipher::Nonce::new(&self.iv, packet_number).to_array::<12>().expect("nonce length should match"));
 
         self.crypto
             .decrypt_in_place(&nonce, aad, &mut payload_)
@@ -124,12 +133,18 @@ impl quic::PacketKey for PacketKey {
     }
 }
 
-#[allow(dead_code)] // TODO
-pub struct KeyBuilder(AeadKey);
+/// A minimal QUIC algorithm implementation for the Chacha20-Poly1305 suite.
+/// Currently, only packet protection is implemented; header protection will
+/// return an error at runtime if used.
+pub struct KeyBuilder;
 
 impl rustls::quic::Algorithm for KeyBuilder {
-    fn packet_key(&self, _key: AeadKey, _iv: Iv) -> Box<dyn quic::PacketKey> {
-        todo!()
+    fn packet_key(&self, key: AeadKey, iv: Iv) -> Box<dyn quic::PacketKey> {
+        Box::new(PacketKey::new(
+            &crate::TLS13_CHACHA20_POLY1305_SHA256,
+            key,
+            iv,
+        ))
     }
 
     fn header_protection_key(&self, key: AeadKey) -> Box<dyn quic::HeaderProtectionKey> {

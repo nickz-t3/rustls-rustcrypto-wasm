@@ -3,11 +3,11 @@ use alloc::boxed::Box;
 
 use digest::{Digest, OutputSizeUser};
 use paste::paste;
-use rustls::crypto::{self, hash};
+use rustls::crypto::{self, hash, HashAlgorithm};
 use sha2::{Sha256, Sha384};
 
 macro_rules! impl_hash {
-    ($name:ident, $ty:ty, $algo:ty) => {
+    ($name:ident, $ty:ty, $algo:expr) => {
         paste! {
             #[allow(non_camel_case_types)]
             struct [<Hash_ $ty>];
@@ -25,7 +25,7 @@ macro_rules! impl_hash {
                     <$ty as OutputSizeUser>::output_size()
                 }
 
-                fn algorithm(&self) -> hash::HashAlgorithm {
+                fn algorithm(&self) -> HashAlgorithm {
                     $algo
                 }
             }
@@ -56,7 +56,7 @@ macro_rules! impl_hash {
     };
 }
 
-// impl_hash! {SHA224, Sha224, hash::HashAlgorithm::SHA224}
-impl_hash! {SHA256, Sha256, hash::HashAlgorithm::SHA256}
-impl_hash! {SHA384, Sha384, hash::HashAlgorithm::SHA384}
-// impl_hash! {SHA512, Sha512, hash::HashAlgorithm::SHA512}
+// impl_hash! {SHA224, Sha224, HashAlgorithm::SHA224}
+impl_hash! {SHA256, Sha256, HashAlgorithm::SHA256}
+impl_hash! {SHA384, Sha384, HashAlgorithm::SHA384}
+// impl_hash! {SHA512, Sha512, HashAlgorithm::SHA512}

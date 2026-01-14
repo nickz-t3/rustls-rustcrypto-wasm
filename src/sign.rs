@@ -1,5 +1,5 @@
 #[cfg(feature = "alloc")]
-use alloc::{sync::Arc, vec::Vec};
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::marker::PhantomData;
 
 use self::ecdsa::{EcdsaSigningKeyP256, EcdsaSigningKeyP384};
@@ -7,8 +7,8 @@ use self::eddsa::Ed25519SigningKey;
 use self::rsa::RsaSigningKey;
 
 use pki_types::PrivateKeyDer;
-use rustls::sign::{Signer, SigningKey};
-use rustls::{Error, SignatureScheme};
+use rustls::crypto::{SignatureScheme, Signer, SigningKey};
+use rustls::Error;
 use signature::{RandomizedSigner, SignatureEncoding};
 
 #[derive(Debug)]
@@ -27,7 +27,7 @@ where
     S: SignatureEncoding + Send + Sync + core::fmt::Debug,
     T: RandomizedSigner<S> + Send + Sync + core::fmt::Debug,
 {
-    fn sign(&self, message: &[u8]) -> Result<Vec<u8>, Error> {
+    fn sign(self: Box<Self>, message: &[u8]) -> Result<Vec<u8>, Error> {
         self.key
             .try_sign_with_rng(&mut rand_core::OsRng, message)
             .map_err(|_| rustls::Error::General("signing failed".into()))
@@ -55,7 +55,7 @@ where
     S: SignatureEncoding + Send + Sync + core::fmt::Debug,
     T: signature::Signer<S> + Send + Sync + core::fmt::Debug,
 {
-    fn sign(&self, message: &[u8]) -> Result<Vec<u8>, Error> {
+    fn sign(self: Box<Self>, message: &[u8]) -> Result<Vec<u8>, Error> {
         self.key
             .try_sign(message)
             .map_err(|_| rustls::Error::General("signing failed".into()))
@@ -96,7 +96,9 @@ pub fn any_ecdsa_type(der: &PrivateKeyDer<'_>) -> Result<Arc<dyn SigningKey>, ru
 ///
 /// Returns an error if the key couldn't be decoded.
 pub fn any_eddsa_type(der: &PrivateKeyDer<'_>) -> Result<Arc<dyn SigningKey>, rustls::Error> {
-    // TODO: Add support for Ed448
+    // Currently only Ed25519 is supported. Ed448 support would require an
+    // additional no_std-capable implementation and is not yet available in
+    // this provider.
     Ed25519SigningKey::try_from(der).map(|x| Arc::new(x) as _)
 }
 

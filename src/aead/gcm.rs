@@ -7,10 +7,11 @@ use aead::AeadInPlace;
 use crypto_common::{KeyInit, KeySizeUser};
 use paste::paste;
 use rustls::crypto::cipher::{
-    self, AeadKey, InboundOpaqueMessage, InboundPlainMessage, MessageDecrypter, MessageEncrypter,
-    OutboundOpaqueMessage, OutboundPlainMessage, PrefixedPayload, Tls13AeadAlgorithm,
+    self, AeadKey, EncodedMessage, InboundOpaque, MessageDecrypter, MessageEncrypter,
+    OutboundOpaque, OutboundPlain, Tls13AeadAlgorithm,
 };
-use rustls::{ConnectionTrafficSecrets, ContentType, ProtocolVersion};
+use rustls::enums::{ContentType, ProtocolVersion};
+use rustls::ConnectionTrafficSecrets;
 
 #[cfg(feature = "tls12")]
 use {
@@ -60,11 +61,11 @@ macro_rules! impl_gcm_tls13 {
             struct [<Tls13Cipher $name>]($aead, cipher::Iv);
 
             impl MessageEncrypter for [<Tls13Cipher $name>] {
-                fn encrypt(&mut self, m: OutboundPlainMessage<'_>, seq: u64) -> Result<OutboundOpaqueMessage, rustls::Error> {
+                fn encrypt(&mut self, m: EncodedMessage<OutboundPlain<'_>>, seq: u64) -> Result<EncodedMessage<OutboundOpaque>, rustls::Error> {
                     let total_len = self.encrypted_payload_len(m.payload.len());
-                    let mut payload = PrefixedPayload::with_capacity(total_len);
+                    let mut payload = OutboundOpaque::with_capacity(total_len);
 
-                    let nonce = cipher::Nonce::new(&self.1, seq).0;
+                    let nonce: [u8; 12] = cipher::Nonce::new(&self.1, seq).to_array().expect("nonce length should match");
                     let aad = cipher::make_tls13_aad(total_len);
                     payload.extend_from_chunks(&m.payload);
                     payload.extend_from_slice(&m.typ.to_array());
@@ -72,7 +73,7 @@ macro_rules! impl_gcm_tls13 {
                     self.0
                         .encrypt_in_place(&nonce.into(), &aad, &mut EncryptBufferAdapter(&mut payload))
                         .map_err(|_| rustls::Error::EncryptError)
-                        .map(|_| OutboundOpaqueMessage::new(
+                        .map(|_| EncodedMessage::new(
                             ContentType::ApplicationData,
                             ProtocolVersion::TLSv1_2,
                             payload,
@@ -85,9 +86,9 @@ macro_rules! impl_gcm_tls13 {
             }
 
             impl MessageDecrypter for [<Tls13Cipher $name>] {
-                fn decrypt<'a>(&mut self, mut m: InboundOpaqueMessage<'a>, seq: u64) -> Result<InboundPlainMessage<'a>, rustls::Error> {
+                fn decrypt<'a>(&mut self, mut m: EncodedMessage<InboundOpaque<'a>>, seq: u64) -> Result<EncodedMessage<&'a [u8]>, rustls::Error> {
                     let payload = &mut m.payload;
-                    let nonce = cipher::Nonce::new(&self.1, seq).0;
+                    let nonce: [u8; 12] = cipher::Nonce::new(&self.1, seq).to_array().expect("nonce length should match");
                     let aad = cipher::make_tls13_aad(payload.len());
 
                     self.0
@@ -146,7 +147,7 @@ macro_rules! impl_gcm_tls12 {
                 ) -> Result<ConnectionTrafficSecrets, cipher::UnsupportedOperationError> {
                     Ok(ConnectionTrafficSecrets::Aes128Gcm {
                         key,
-                        iv: Iv::new(iv[..].try_into().unwrap()),
+                        iv: Iv::new(iv[..].try_into().unwrap()).expect("iv length should be valid"),
                     })
                 }
             }
@@ -156,20 +157,20 @@ macro_rules! impl_gcm_tls12 {
 
             #[cfg(feature = "tls12")]
             impl MessageEncrypter for [<Tls12Cipher $name Encrypter>] {
-                fn encrypt(&mut self, m: OutboundPlainMessage<'_>, seq: u64) -> Result<OutboundOpaqueMessage, rustls::Error> {
+                fn encrypt(&mut self, m: EncodedMessage<OutboundPlain<'_>>, seq: u64) -> Result<EncodedMessage<OutboundOpaque>, rustls::Error> {
                     let total_len = self.encrypted_payload_len(m.payload.len());
-                    let mut payload = PrefixedPayload::with_capacity(total_len);
+                    let mut payload = OutboundOpaque::with_capacity(total_len);
 
-                    let nonce = cipher::Nonce::new(&self.1.into(), seq).0;
+                    let nonce: [u8; 12] = cipher::Nonce::new(&self.1.into(), seq).to_array().expect("nonce length should match");
                     let aad = cipher::make_tls12_aad(seq, m.typ, m.version, m.payload.len());
                     payload.extend_from_slice(&nonce.as_ref()[4..]); // explicit
                     payload.extend_from_chunks(&m.payload);
 
                     self.0
                         .encrypt_in_place_detached(&nonce.into(), &aad, &mut payload.as_mut()[$nonce..])
-                        .map(|tag| payload.extend(tag.as_ref() as &[u8]))
+                        .map(|tag| payload.extend_from_slice(tag.as_ref()))
                         .map_err(|_| rustls::Error::EncryptError)
-                        .map(|_| OutboundOpaqueMessage::new(m.typ, m.version, payload))
+                        .map(|_| EncodedMessage::new(m.typ, m.version, payload))
                 }
                 fn encrypted_payload_len(&self, payload_len: usize) -> usize {
                     payload_len + $nonce + <$aead as AeadCore>::TagSize::USIZE
@@ -181,7 +182,7 @@ macro_rules! impl_gcm_tls12 {
 
             #[cfg(feature = "tls12")]
             impl MessageDecrypter for [<Tls12Cipher $name Decrypter>] {
-                fn decrypt<'a>(&mut self, mut m: InboundOpaqueMessage<'a>, seq: u64) -> Result<InboundPlainMessage<'a>, rustls::Error> {
+                fn decrypt<'a>(&mut self, mut m: EncodedMessage<InboundOpaque<'a>>, seq: u64) -> Result<EncodedMessage<&'a [u8]>, rustls::Error> {
                     type TagSize = <$aead as AeadCore>::TagSize;
 
                     let payload = &m.payload;
