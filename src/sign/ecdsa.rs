@@ -3,9 +3,8 @@ use alloc::{boxed::Box, format, sync::Arc};
 use core::marker::PhantomData;
 
 use paste::paste;
-use pkcs8::DecodePrivateKey;
-use pki_types::PrivateKeyDer;
-use pki_types::SubjectPublicKeyInfoDer;
+use pkcs8::{DecodePrivateKey, EncodePublicKey};
+use pki_types::{PrivateKeyDer, SubjectPublicKeyInfoDer};
 use rustls::crypto::{SignatureScheme, Signer, SigningKey};
 use sec1::DecodeEcPrivateKey;
 
@@ -55,8 +54,11 @@ macro_rules! impl_ecdsa {
                 }
 
                 fn public_key(&self) -> Option<SubjectPublicKeyInfoDer<'_>> {
-                    // TODO: Implement proper SPKI encoding
-                    None
+                    // Encode the ECDSA public key as a standards-compliant
+                    // SubjectPublicKeyInfo using the `pkcs8` helper.
+                    let verifying_key = self.key.verifying_key();
+                    let spki_der = verifying_key.to_public_key_der().ok()?;
+                    Some(SubjectPublicKeyInfoDer::from(spki_der.as_ref().to_vec()))
                 }
             }
         }

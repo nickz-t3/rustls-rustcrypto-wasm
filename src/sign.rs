@@ -96,7 +96,9 @@ pub fn any_ecdsa_type(der: &PrivateKeyDer<'_>) -> Result<Arc<dyn SigningKey>, ru
 ///
 /// Returns an error if the key couldn't be decoded.
 pub fn any_eddsa_type(der: &PrivateKeyDer<'_>) -> Result<Arc<dyn SigningKey>, rustls::Error> {
-    // TODO: Add support for Ed448
+    // Currently only Ed25519 is supported. Ed448 support would require an
+    // additional no_std-capable implementation and is not yet available in
+    // this provider.
     Ed25519SigningKey::try_from(der).map(|x| Arc::new(x) as _)
 }
 

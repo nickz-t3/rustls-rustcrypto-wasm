@@ -1,11 +1,10 @@
 #[cfg(feature = "alloc")]
 use alloc::{boxed::Box, format, string::ToString, sync::Arc};
 
-use pkcs8::DecodePrivateKey;
-use pki_types::PrivateKeyDer;
+use pkcs8::{DecodePrivateKey, EncodePublicKey};
+use pki_types::{PrivateKeyDer, SubjectPublicKeyInfoDer};
 use rsa::pkcs1::DecodeRsaPrivateKey;
 use rsa::RsaPrivateKey;
-use pki_types::SubjectPublicKeyInfoDer;
 use rustls::crypto::{SignatureScheme, Signer, SigningKey};
 use sha2::{Sha256, Sha384, Sha512};
 
@@ -73,7 +72,10 @@ impl SigningKey for RsaSigningKey {
     }
 
     fn public_key(&self) -> Option<SubjectPublicKeyInfoDer<'_>> {
-        // TODO: Implement proper SPKI encoding
-        None
+        // Encode the RSA public key as a standards-compliant SubjectPublicKeyInfo
+        // using the `pkcs8` helper.
+        let public = self.0.to_public_key();
+        let spki_der = public.to_public_key_der().ok()?;
+        Some(SubjectPublicKeyInfoDer::from(spki_der.as_ref().to_vec()))
     }
 }

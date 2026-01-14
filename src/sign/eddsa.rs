@@ -2,11 +2,9 @@
 use alloc::{boxed::Box, format, string::ToString, sync::Arc};
 use core::marker::PhantomData;
 
-use pkcs8::DecodePrivateKey;
-use pki_types::PrivateKeyDer;
-use pki_types::SubjectPublicKeyInfoDer;
+use pkcs8::{DecodePrivateKey, EncodePublicKey};
+use pki_types::{PrivateKeyDer, SubjectPublicKeyInfoDer};
 use rustls::crypto::{SignatureScheme, Signer, SigningKey};
-use sec1::DecodeEcPrivateKey;
 
 #[derive(Debug)]
 pub struct Ed25519SigningKey {
@@ -23,10 +21,8 @@ impl TryFrom<&PrivateKeyDer<'_>> for Ed25519SigningKey {
                 ed25519_dalek::SigningKey::from_pkcs8_der(der.secret_pkcs8_der())
                     .map_err(|e| format!("failed to decrypt private key: {e}"))
             }
-            PrivateKeyDer::Sec1(sec1) => {
-                ed25519_dalek::SigningKey::from_sec1_der(sec1.secret_sec1_der())
-                    .map_err(|e| format!("failed to decrypt private key: {e}"))
-            }
+            // Ed25519 does not have a SEC1 encoding; treat this as unsupported.
+            PrivateKeyDer::Sec1(_) => Err("ED25519 does not support SEC1 key".to_string()),
             PrivateKeyDer::Pkcs1(_) => Err("ED25519 does not support PKCS#1 key".to_string()),
             _ => Err("not supported".into()),
         };
@@ -52,7 +48,10 @@ impl SigningKey for Ed25519SigningKey {
     }
 
     fn public_key(&self) -> Option<SubjectPublicKeyInfoDer<'_>> {
-        // TODO: Implement proper SPKI encoding
-        None
+        // Encode the Ed25519 public key as a standards-compliant
+        // SubjectPublicKeyInfo using the `pkcs8` helper.
+        let vk = self.key.verifying_key();
+        let spki_der = vk.to_public_key_der().ok()?;
+        Some(SubjectPublicKeyInfoDer::from(spki_der.as_ref().to_vec()))
     }
 }
