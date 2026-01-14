@@ -71,8 +71,9 @@ impl quic::PacketKey for PacketKey {
         packet_number: u64,
         aad: &[u8],
         payload: &mut [u8],
+        _key_id: Option<u32>,
     ) -> Result<quic::Tag, Error> {
-        let nonce = cipher::Nonce::new(&self.iv, packet_number).0;
+        let nonce: [u8; 12] = cipher::Nonce::new(&self.iv, packet_number).to_array().expect("nonce length should match");
 
         let tag = self
             .crypto
@@ -93,10 +94,11 @@ impl quic::PacketKey for PacketKey {
         packet_number: u64,
         aad: &[u8],
         payload: &'a mut [u8],
+        _key_id: Option<u32>,
     ) -> Result<&'a [u8], Error> {
         let mut payload_ = payload.to_vec();
         let payload_len = payload_.len();
-        let nonce = chacha20poly1305::Nonce::from(cipher::Nonce::new(&self.iv, packet_number).0);
+        let nonce = chacha20poly1305::Nonce::from(cipher::Nonce::new(&self.iv, packet_number).to_array::<12>().expect("nonce length should match"));
 
         self.crypto
             .decrypt_in_place(&nonce, aad, &mut payload_)

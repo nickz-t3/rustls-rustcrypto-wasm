@@ -5,8 +5,8 @@ use pkcs8::DecodePrivateKey;
 use pki_types::PrivateKeyDer;
 use rsa::pkcs1::DecodeRsaPrivateKey;
 use rsa::RsaPrivateKey;
-use rustls::sign::{Signer, SigningKey};
-use rustls::{SignatureAlgorithm, SignatureScheme};
+use pki_types::SubjectPublicKeyInfoDer;
+use rustls::crypto::{SignatureScheme, Signer, SigningKey};
 use sha2::{Sha256, Sha384, Sha512};
 
 const ALL_RSA_SCHEMES: &[SignatureScheme] = &[
@@ -72,7 +72,8 @@ impl SigningKey for RsaSigningKey {
             })
     }
 
-    fn algorithm(&self) -> SignatureAlgorithm {
-        SignatureAlgorithm::RSA
+    fn public_key(&self) -> Option<SubjectPublicKeyInfoDer<'_>> {
+        // TODO: Implement proper SPKI encoding
+        None
     }
 }

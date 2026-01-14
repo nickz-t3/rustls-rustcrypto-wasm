@@ -4,8 +4,8 @@ use core::marker::PhantomData;
 
 use pkcs8::DecodePrivateKey;
 use pki_types::PrivateKeyDer;
-use rustls::sign::{Signer, SigningKey};
-use rustls::{SignatureAlgorithm, SignatureScheme};
+use pki_types::SubjectPublicKeyInfoDer;
+use rustls::crypto::{SignatureScheme, Signer, SigningKey};
 use sec1::DecodeEcPrivateKey;
 
 #[derive(Debug)]
@@ -51,7 +51,8 @@ impl SigningKey for Ed25519SigningKey {
         }
     }
 
-    fn algorithm(&self) -> SignatureAlgorithm {
-        SignatureAlgorithm::ED25519
+    fn public_key(&self) -> Option<SubjectPublicKeyInfoDer<'_>> {
+        // TODO: Implement proper SPKI encoding
+        None
     }
 }

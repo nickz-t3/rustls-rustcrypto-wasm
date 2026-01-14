@@ -1,10 +1,10 @@
 use aead::Buffer;
-use rustls::crypto::cipher::{BorrowedPayload, PrefixedPayload};
+use rustls::crypto::cipher::{InboundOpaque, OutboundOpaque};
 
 pub mod chacha20;
 pub mod gcm;
 
-pub(crate) struct EncryptBufferAdapter<'a>(&'a mut PrefixedPayload);
+pub(crate) struct EncryptBufferAdapter<'a>(&'a mut OutboundOpaque);
 
 impl AsRef<[u8]> for EncryptBufferAdapter<'_> {
     fn as_ref(&self) -> &[u8] {
@@ -29,7 +29,7 @@ impl Buffer for EncryptBufferAdapter<'_> {
     }
 }
 
-pub(crate) struct DecryptBufferAdapter<'a, 'p>(&'a mut BorrowedPayload<'p>);
+pub(crate) struct DecryptBufferAdapter<'a, 'p>(&'a mut InboundOpaque<'p>);
 
 impl AsRef<[u8]> for DecryptBufferAdapter<'_, '_> {
     fn as_ref(&self) -> &[u8] {

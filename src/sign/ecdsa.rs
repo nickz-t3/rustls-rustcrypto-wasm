@@ -5,8 +5,8 @@ use core::marker::PhantomData;
 use paste::paste;
 use pkcs8::DecodePrivateKey;
 use pki_types::PrivateKeyDer;
-use rustls::sign::SigningKey;
-use rustls::{SignatureAlgorithm, SignatureScheme};
+use pki_types::SubjectPublicKeyInfoDer;
+use rustls::crypto::{SignatureScheme, Signer, SigningKey};
 use sec1::DecodeEcPrivateKey;
 
 macro_rules! impl_ecdsa {
@@ -42,7 +42,7 @@ macro_rules! impl_ecdsa {
             }
 
             impl SigningKey for [<EcdsaSigningKey $name>] {
-                fn choose_scheme(&self, offered: &[SignatureScheme]) -> Option<Box<dyn rustls::sign::Signer>> {
+                fn choose_scheme(&self, offered: &[SignatureScheme]) -> Option<Box<dyn Signer>> {
                     if offered.contains(&self.scheme) {
                         Some(Box::new(super::GenericRandomizedSigner::<$signature, _> {
                             _marker: PhantomData,
@@ -54,8 +54,9 @@ macro_rules! impl_ecdsa {
                     }
                 }
 
-                fn algorithm(&self) -> SignatureAlgorithm {
-                    SignatureAlgorithm::ECDSA
+                fn public_key(&self) -> Option<SubjectPublicKeyInfoDer<'_>> {
+                    // TODO: Implement proper SPKI encoding
+                    None
                 }
             }
         }
